@@ -21,7 +21,7 @@
 
 // Constants
 #define EEPROM_SIZE 512
-#define AP_SSID_PREFIX "Starting Smart Gas and Temperature Monitor System"
+#define AP_SSID_PREFIX "Smart Gas and Temperature Monitor"
 #define AP_PASSWORD "12345678"  // Default password, will be changed during setup
 #define MAX_DEVICES 10
 #define LCD_COLS 16
@@ -146,12 +146,12 @@ void setup() {
   // Setup network
   if (stationSSID.length() > 0) {
     setupStation();
+    setupAccessPoint();
     // If station connection fails, fall back to AP mode
     if (WiFi.status() != WL_CONNECTED) {
       setupAccessPoint();
     }
   } else {
-    setupAccessPoint();
   }
   
   // Setup WebSocket server
@@ -494,8 +494,42 @@ void setupAccessPoint() {
   apMode = true;
 }
 
+// void setupStation() {
+//   Serial.println("Connecting to WiFi network...");
+//   WiFi.begin(stationSSID.c_str(), stationPassword.c_str());
+  
+//   // Wait for connection with timeout
+//   int timeout = 0;
+//   while (WiFi.status() != WL_CONNECTED && timeout < 20) {
+//     delay(500);
+//     Serial.print(".");
+//     timeout++;
+//   }
+  
+//   if (WiFi.status() == WL_CONNECTED) {
+//     Serial.println("");
+//     Serial.print("Connected to ");
+//     Serial.println(stationSSID);
+//     Serial.print("IP address: ");
+//     Serial.println(WiFi.localIP());
+//     apMode = false;
+//   } else {
+//     Serial.println("");
+//     Serial.println("Connection failed");
+//   }
+// }
+
+
 void setupStation() {
   Serial.println("Connecting to WiFi network...");
+  
+  // CHANGE: Set up AP mode first to ensure it's always active
+  WiFi.softAP(apSSID.c_str(), apPassword.c_str());
+  Serial.print("AP IP address: ");
+  Serial.println(WiFi.softAPIP());
+  
+  // Then connect to the WiFi network
+  WiFi.mode(WIFI_AP_STA); // CHANGE: Set mode to both AP and Station
   WiFi.begin(stationSSID.c_str(), stationPassword.c_str());
   
   // Wait for connection with timeout
@@ -512,13 +546,12 @@ void setupStation() {
     Serial.println(stationSSID);
     Serial.print("IP address: ");
     Serial.println(WiFi.localIP());
-    apMode = false;
+    apMode = false; // Still mark as station mode for the UI
   } else {
     Serial.println("");
     Serial.println("Connection failed");
   }
 }
-
 void handleButtons() {
   // Read button states with debounce
   bool b1 = digitalRead(BUTTON1_PIN) == LOW;
