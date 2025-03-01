@@ -21,7 +21,7 @@
 
 // Constants
 #define EEPROM_SIZE 512
-#define AP_SSID_PREFIX "Smart Gas and Temperature Monitor"
+#define AP_SSID_PREFIX "Smart Gas Monitor"
 #define AP_PASSWORD "12345678"  // Default password, will be changed during setup
 #define MAX_DEVICES 10
 #define LCD_COLS 16
@@ -50,10 +50,10 @@ float gasThreshold = 500;  // Default gas threshold (adjust based on sensor)
 float tempThreshold = 35;  // Default temperature threshold in °C
 
 // Button states
-bool button1State = false;
+bool menuButtonState = false;
 bool button2State = false;
 bool button3State = false;
-bool button1LastState = false;
+bool menuButtonLastState = false;
 bool button2LastState = false;
 bool button3LastState = false;
 unsigned long lastButtonDebounceTime = 0;
@@ -141,7 +141,7 @@ void setup() {
              String(mac[3], HEX) + String(mac[4], HEX) + String(mac[5], HEX);
   deviceID.toUpperCase();
   
-  apSSID = AP_SSID_PREFIX + deviceID.substring(0, 6);
+  apSSID = AP_SSID_PREFIX;
   
   // Setup network
   if (stationSSID.length() > 0) {
@@ -152,6 +152,8 @@ void setup() {
       setupAccessPoint();
     }
   } else {
+    setupAccessPoint();
+
   }
   
   // Setup WebSocket server
@@ -490,6 +492,7 @@ void setupAccessPoint() {
   
   IPAddress IP = WiFi.softAPIP();
   Serial.print("AP IP address: ");
+  Serial.print(apPassword.c_str());
   Serial.println(IP);
   apMode = true;
 }
@@ -554,19 +557,19 @@ void setupStation() {
 }
 void handleButtons() {
   // Read button states with debounce
-  bool b1 = digitalRead(BUTTON1_PIN) == LOW;
+  bool menuButton = digitalRead(BUTTON1_PIN) == LOW;
   bool b2 = digitalRead(BUTTON2_PIN) == LOW;
   bool b3 = digitalRead(BUTTON3_PIN) == LOW;
   
-  if (b1 != button1LastState || b2 != button2LastState || b3 != button3LastState) {
+  if (menuButton != menuButtonLastState || b2 != button2LastState || b3 != button3LastState) {
     lastButtonDebounceTime = millis();
   }
   
   if ((millis() - lastButtonDebounceTime) > debounceDelay) {
     // If button state has changed, update the state
-    if (b1 != button1State) {
-      button1State = b1;
-      if (button1State) {
+    if (menuButton != menuButtonState) {
+      menuButtonState = menuButton;
+      if (menuButtonState) {
         // Button 1 (Mode) pressed
         if (currentMenu == MAIN_SCREEN) {
           currentMenu = MENU_MAIN;
@@ -581,10 +584,30 @@ void handleButtons() {
     
     if (b2 != button2State) {
       button2State = b2;
-      if (button2State && currentMenu != MAIN_SCREEN) {
+      if (button2State ) {
+
+        if(currentMenu == SET_TEMP_THRESHOLD) {
+          // Button 2 (Up) pressed
+          tempThreshold += 1;
+          navigateMenu();
+        } else if(currentMenu == SET_GAS_THRESHOLD) {
+          // Button 2 (Up) pressed
+          gasThreshold += 10;
+          navigateMenu();
+        }else if (currentMenu == WIFI_SETTINGS) {
+          apMode = !apMode;
+          if (apMode) {
+            setupAccessPoint();
+          } else {
+            setupStation();
+        }
+       
+          
+        }
+        else if( currentMenu == MENU_MAIN){
         // Button 2 (Up) pressed
         menuPosition = (menuPosition - 1 + MAX_MENU_ITEMS) % MAX_MENU_ITEMS;
-        navigateMenu();
+        navigateMenu();}
       }
     }
     
@@ -608,7 +631,35 @@ void handleButtons() {
               currentMenu = DEVICE_INFO;
               break;
           }
-        } else {
+        }else if (currentMenu == SET_TEMP_THRESHOLD) {
+          // Button 3 (Down/Select) pressed
+          gasThreshold -= 10;
+         
+          
+          
+        }else if (currentMenu == SET_GAS_THRESHOLD) {
+          // Button 3 (Down/Select) pressed
+          tempThreshold -= 1;
+         
+
+          
+          
+        }else if (currentMenu == WIFI_SETTINGS) {
+          // Button 3 (Down/Select) pressed
+          apMode = !apMode;
+          if (apMode) {
+            setupAccessPoint();
+          } else {
+            setupStation();
+          }
+         
+
+          
+          
+          
+        }
+        
+        else {
           // Navigate within submenu
           menuPosition = (menuPosition + 1) % MAX_MENU_ITEMS;
         }
@@ -617,7 +668,7 @@ void handleButtons() {
     }
   }
   
-  button1LastState = b1;
+  menuButtonLastState = menuButton;
   button2LastState = b2;
   button3LastState = b3;
 }
@@ -642,9 +693,9 @@ void navigateMenu() {
       
     case SET_TEMP_THRESHOLD:
       lcd.setCursor(0, 0);
-      lcd.print("Temperature Threshold");
+      lcd.print("Temp. Thresh");
       lcd.setCursor(0, 1);
-      lcd.print("Current: ");
+      lcd.print("Curr: ");
       lcd.print(tempThreshold, 1);
       lcd.print((char)223);
       lcd.print("C");
@@ -656,9 +707,9 @@ void navigateMenu() {
       
     case SET_GAS_THRESHOLD:
       lcd.setCursor(0, 0);
-      lcd.print("Gas Threshold");
+      lcd.print("Gas Thresh");
       lcd.setCursor(0, 1);
-      lcd.print("Current: ");
+      lcd.print("Curr: ");
       lcd.print(gasThreshold, 0);
       lcd.setCursor(0, 2);
       lcd.print("UP: +10  DOWN: -10");
@@ -671,7 +722,7 @@ void navigateMenu() {
       lcd.print("WiFi Settings");
       lcd.setCursor(0, 1);
       if (apMode) {
-        lcd.print("Mode: Access Point");
+        lcd.print("Mode: AP");
       } else {
         lcd.print("Mode: Station");
       }
