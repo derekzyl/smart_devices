@@ -113,6 +113,7 @@ class MonitoringSystem extends ChangeNotifier {
       _channel!.stream.listen(
         (message) {
           final data = jsonDecode(message);
+          // print('WebSocket message: $data');
           _updateFromJson(data);
           notifyListeners();
         },
@@ -459,16 +460,24 @@ class DashboardScreen extends StatefulWidget {
 
 class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProviderStateMixin {
   late TabController _tabController;
+    late TextEditingController gasThresholdController;
+  late TextEditingController tempThresholdController;
   
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
+        // Initialize with default values, you'll update them later
+    gasThresholdController = TextEditingController();
+    tempThresholdController = TextEditingController();
   }
   
   @override
   void dispose() {
     _tabController.dispose();
+
+        gasThresholdController.dispose();
+    tempThresholdController.dispose();
     super.dispose();
   }
   
@@ -599,6 +608,149 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
     );
   }
   
+
+                        Widget _buildSettingsTab(MonitoringSystem system) {
+   // Update the text only when needed, not recreate the controllers
+  // gasThresholdController.text = system.gasThreshold.toStringAsFixed(0);
+  // tempThresholdController.text = system.tempThreshold.toStringAsFixed(1);
+    
+    return SingleChildScrollView(
+      padding: EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Neumorphic(
+            style: NeumorphicStyle(
+              depth: 4,
+              intensity: 0.6,
+              boxShape: NeumorphicBoxShape.roundRect(BorderRadius.circular(12)),
+              // padding: EdgeInsets.all(16),
+              ),
+          
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Alarm Thresholds',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                SizedBox(height: 16),
+                Text('Gas Level Threshold'),
+                SizedBox(height: 8),
+                Neumorphic(
+                  style: NeumorphicStyle(
+                    depth: -3,
+                    intensity: 0.7,
+                    boxShape: NeumorphicBoxShape.roundRect(BorderRadius.circular(8)),
+                  ),
+                  padding: EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                  child: TextField(
+                    controller: gasThresholdController,
+                    enabled:true,
+                    keyboardType: TextInputType.number,
+                    decoration: InputDecoration(
+                      border: InputBorder.none,
+                      suffixText: 'PPM',
+                      suffixStyle: TextStyle(color: Colors.grey),
+                    ),
+                  ),
+                ),
+                SizedBox(height: 16),
+                Text('Temperature Threshold'),
+                SizedBox(height: 8),
+                Neumorphic(
+                  style: NeumorphicStyle(
+                    depth: -3,
+                    intensity: 0.7,
+                    boxShape: NeumorphicBoxShape.roundRect(BorderRadius.circular(8)),
+                  ),
+                  padding: EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                  child: TextField(
+                    controller: tempThresholdController,
+                    keyboardType: TextInputType.number,
+                    enabled:true,
+                    decoration: InputDecoration(
+                      border: InputBorder.none,
+                      suffixText: '°C',
+                      suffixStyle: TextStyle(color: Colors.grey),
+                    ),
+                  ),
+                ),
+                SizedBox(height: 16),
+                NeumorphicButton(
+                  onPressed: () {
+                    final gasThreshold = double.tryParse(gasThresholdController.text);
+                    final tempThreshold = double.tryParse(tempThresholdController.text);
+                    
+                    if (gasThreshold != null && tempThreshold != null) {
+                      system.updateThresholds(gasThreshold, tempThreshold);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Thresholds updated successfully!'),
+                          backgroundColor: Colors.green,
+                        ),
+                      );
+                    } else {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Invalid input. Please enter valid numbers.'),
+                          backgroundColor: Colors.red,
+                        ),
+                      );
+                    }
+                  },
+                  style: NeumorphicStyle(
+                    depth: 4,
+                    intensity: 0.8,
+                    boxShape: NeumorphicBoxShape.roundRect(BorderRadius.circular(12)),
+                    color: Colors.blue[700],
+                  ),
+                  padding: EdgeInsets.symmetric(vertical: 16),
+                  child: Center(
+                    child: Text(
+                      'Update Thresholds',
+                      style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          SizedBox(height: 16),
+          Neumorphic(
+            style: NeumorphicStyle(
+              depth: 4,
+              intensity: 0.6,
+              boxShape: NeumorphicBoxShape.roundRect(BorderRadius.circular(12)),
+            ),
+            padding: EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Device Information',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                SizedBox(height: 16),
+                Text('Device ID: ${system.deviceID}'),
+                SizedBox(height: 8),
+                Text('IP Address: ${system.deviceIP}'),
+                SizedBox(height: 8),
+                Text('Connection Status: ${system.connected ? 'Connected' : 'Disconnected'}'),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildAlarmIndicator() {
     return NeumorphicButton(
       style: NeumorphicStyle(
@@ -695,6 +847,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                     ? 'Above threshold!'
                     : 'Normal',
                   isWarning: system.temperature > system.tempThreshold,
+                  threshold: system.tempThreshold,
                 ),
               ),
               SizedBox(width: 16),
@@ -720,14 +873,15 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
             color: _getGasLevelColor(system.gasLevel, system.gasThreshold),
             showProgress: true,
             progress: _calculateGasLevelProgress(system.gasLevel),
+            threshold: system.gasThreshold,
           ),
           SizedBox(height: 16),
           Row(
             children: [
               Expanded(
                 child: _buildControlButton(
-                  title: 'Exhaust Fan',
-                  icon: Icons.podcasts_outlined,
+                  title: 'Sprinkle water',
+                  icon: Icons.water_drop_outlined,
                   isActive: system.relayState,
                   onPressed: () {
                     system.toggleRelay();
@@ -876,146 +1030,6 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
 
 
 
-
-                        Widget _buildSettingsTab(MonitoringSystem system) {
-    final gasThresholdController = TextEditingController(text: system.gasThreshold.toStringAsFixed(0));
-    final tempThresholdController = TextEditingController(text: system.tempThreshold.toStringAsFixed(1));
-    
-    return SingleChildScrollView(
-      padding: EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Neumorphic(
-            style: NeumorphicStyle(
-              depth: 4,
-              intensity: 0.6,
-              boxShape: NeumorphicBoxShape.roundRect(BorderRadius.circular(12)),
-              // padding: EdgeInsets.all(16),
-              ),
-          
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Alarm Thresholds',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                SizedBox(height: 16),
-                Text('Gas Level Threshold'),
-                SizedBox(height: 8),
-                Neumorphic(
-                  style: NeumorphicStyle(
-                    depth: -3,
-                    intensity: 0.7,
-                    boxShape: NeumorphicBoxShape.roundRect(BorderRadius.circular(8)),
-                  ),
-                  padding: EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                  child: TextField(
-                    controller: gasThresholdController,
-                    keyboardType: TextInputType.number,
-                    decoration: InputDecoration(
-                      border: InputBorder.none,
-                      suffixText: 'PPM',
-                      suffixStyle: TextStyle(color: Colors.grey),
-                    ),
-                  ),
-                ),
-                SizedBox(height: 16),
-                Text('Temperature Threshold'),
-                SizedBox(height: 8),
-                Neumorphic(
-                  style: NeumorphicStyle(
-                    depth: -3,
-                    intensity: 0.7,
-                    boxShape: NeumorphicBoxShape.roundRect(BorderRadius.circular(8)),
-                  ),
-                  padding: EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                  child: TextField(
-                    controller: tempThresholdController,
-                    keyboardType: TextInputType.number,
-                    decoration: InputDecoration(
-                      border: InputBorder.none,
-                      suffixText: '°C',
-                      suffixStyle: TextStyle(color: Colors.grey),
-                    ),
-                  ),
-                ),
-                SizedBox(height: 16),
-                NeumorphicButton(
-                  onPressed: () {
-                    final gasThreshold = double.tryParse(gasThresholdController.text);
-                    final tempThreshold = double.tryParse(tempThresholdController.text);
-                    
-                    if (gasThreshold != null && tempThreshold != null) {
-                      system.updateThresholds(gasThreshold, tempThreshold);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text('Thresholds updated successfully!'),
-                          backgroundColor: Colors.green,
-                        ),
-                      );
-                    } else {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text('Invalid input. Please enter valid numbers.'),
-                          backgroundColor: Colors.red,
-                        ),
-                      );
-                    }
-                  },
-                  style: NeumorphicStyle(
-                    depth: 4,
-                    intensity: 0.8,
-                    boxShape: NeumorphicBoxShape.roundRect(BorderRadius.circular(12)),
-                    color: Colors.blue[700],
-                  ),
-                  padding: EdgeInsets.symmetric(vertical: 16),
-                  child: Center(
-                    child: Text(
-                      'Update Thresholds',
-                      style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          SizedBox(height: 16),
-          Neumorphic(
-            style: NeumorphicStyle(
-              depth: 4,
-              intensity: 0.6,
-              boxShape: NeumorphicBoxShape.roundRect(BorderRadius.circular(12)),
-            ),
-            padding: EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Device Information',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                SizedBox(height: 16),
-                Text('Device ID: ${system.deviceID}'),
-                SizedBox(height: 8),
-                Text('IP Address: ${system.deviceIP}'),
-                SizedBox(height: 8),
-                Text('Connection Status: ${system.connected ? 'Connected' : 'Disconnected'}'),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   List<FlSpot> _getTemperatureSpots(List<SensorReading> history) {
     return history
         .asMap()
@@ -1055,80 +1069,87 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
       return Colors.green;
     }
   }
-
-  Widget _buildSensorCard({
-    required String title,
-    required String value,
-    required IconData icon,
-    required Color color,
-    String subtitle = '',
-    bool isWarning = false,
-    bool showProgress = false,
-    double progress = 0.0,
-  }) {
-    return Neumorphic(
-      style: NeumorphicStyle(
-        depth: 4,
-        intensity: 0.6,
-        boxShape: NeumorphicBoxShape.roundRect(BorderRadius.circular(12)),
-      ),
-      padding: EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(icon, color: color, size: 32),
-              SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
+Widget _buildSensorCard({
+  required String title,
+  required String value,
+  required IconData icon,
+  required Color color,
+  String subtitle = '',
+  bool isWarning = false,
+  bool showProgress = false,
+  double progress = 0.0,
+  double? threshold, // Add threshold parameter
+}) {
+  return Neumorphic(
+    style: NeumorphicStyle(
+      depth: 4,
+      intensity: 0.6,
+      boxShape: NeumorphicBoxShape.roundRect(BorderRadius.circular(12)),
+    ),
+    padding: EdgeInsets.all(16),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(icon, color: color, size: 32),
+            SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  Text(
+                    value,
+                    style: TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                      color: isWarning ? Colors.red : Colors.black,
+                    ),
+                  ),
+                  if (subtitle.isNotEmpty)
                     Text(
-                      title,
+                      subtitle,
                       style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                        color: isWarning ? Colors.red : Colors.grey,
                       ),
                     ),
+                  if (threshold != null) // Display threshold if provided
                     Text(
-                      value,
+                      'Threshold: $threshold',
                       style: TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                        color: isWarning ? Colors.red : Colors.black,
+                        fontSize: 14,
+                        color: Colors.grey,
                       ),
                     ),
-                    if (subtitle.isNotEmpty)
-                      Text(
-                        subtitle,
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: isWarning ? Colors.red : Colors.grey,
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          if (showProgress)
-            Padding(
-              padding: EdgeInsets.only(top: 12),
-              child: NeumorphicProgress(
-                height: 8,
-                percent: progress,
-                style: ProgressStyle(
-                  accent: color,
-                  variant: color.withOpacity(0.2),
-                ),
+                ],
               ),
             ),
-        ],
-      ),
-    );
-  }
-
+          ],
+        ),
+        if (showProgress)
+          Padding(
+            padding: EdgeInsets.only(top: 12),
+            child: NeumorphicProgress(
+              height: 8,
+              percent: progress,
+              style: ProgressStyle(
+                accent: color,
+                variant: color.withOpacity(0.2),
+              ),
+            ),
+          ),
+      ],
+    ),
+  );
+}
   Widget _buildControlButton({
     required String title,
     required IconData icon,
