@@ -17,7 +17,7 @@
 #define BUTTON3_PIN 25   // Button 3 connected to D25 (Down)
 #define ALARM_PIN 23     // Alarm connected to D23
 #define SMOKE_SENSOR_PIN 33  // MQ gas sensor connected to D33
-#define RELAY_PIN 16     // Relay module connected to D16
+#define RELAY_PIN 17     // Relay module connected to D17
 
 // Constants
 #define EEPROM_SIZE 512
@@ -113,6 +113,7 @@ void setup() {
   pinMode(BUTTON3_PIN, INPUT_PULLUP);
   pinMode(ALARM_PIN, OUTPUT);
   pinMode(RELAY_PIN, OUTPUT);
+  pinMode(SMOKE_SENSOR_PIN, INPUT);
   
   digitalWrite(ALARM_PIN, LOW);
   digitalWrite(RELAY_PIN, LOW);
@@ -143,18 +144,18 @@ void setup() {
   
   apSSID = AP_SSID_PREFIX;
   
-  // Setup network
-  if (stationSSID.length() > 0) {
-    setupStation();
-    setupAccessPoint();
-    // If station connection fails, fall back to AP mode
-    if (WiFi.status() != WL_CONNECTED) {
-      setupAccessPoint();
-    }
-  } else {
-    setupAccessPoint();
-
-  }
+  // // Setup network
+  // if (stationSSID.length() > 0) {
+  //   setupStation();
+  //   setupAccessPoint();
+  //   // If station connection fails, fall back to AP mode
+  //   if (WiFi.status() != WL_CONNECTED) {
+  //     setupAccessPoint();
+  //   }
+  // } else {
+    
+  // }
+  setupAccessPoint();
   
   // Setup WebSocket server
   webSocket.begin();
@@ -352,7 +353,7 @@ void sendSensorData() {
   doc["relayState"] = relayState;
   doc["autoMode"] = autoMode;
   doc["gasThreshold"] = gasThreshold;
-  doc["tempThreshold"] = tempThreshold;
+  doc["tempThreshold"] = tempThreshold;   
   
   String message;
   serializeJson(doc, message);
@@ -392,6 +393,7 @@ void checkAlarms() {
   // Check gas level threshold
   if (gasLevel > gasThreshold) {
     shouldAlarm = true;
+
   }
   
   // Check temperature threshold
@@ -413,6 +415,15 @@ void checkAlarms() {
   // Note: We don't automatically turn off the alarm - it requires manual reset
 }
 
+
+void triggerWaterSprinkler(bool val){
+  if(val){
+    digitalWrite(RELAY_PIN, HIGH);
+  }else{
+    digitalWrite(RELAY_PIN, LOW);
+  }
+  sendSensorData();
+}
 void saveSettings() {
   // Save AP password (if changed)
   for (int i = 0; i < apPassword.length(); i++) {
@@ -487,12 +498,20 @@ void loadSettings() {
 }
 
 void setupAccessPoint() {
+
+  const char* password = "12345678";
   Serial.println("Setting up Access Point...");
-  WiFi.softAP(apSSID.c_str(), apPassword.c_str());
+  Serial.println("Setting up Access Point...");
+  Serial.print("SSID: ");
+  Serial.println(apSSID);
+  Serial.print("Password: ");
+  Serial.println(password);
+  
+  WiFi.softAP(apSSID.c_str(), password);
   
   IPAddress IP = WiFi.softAPIP();
   Serial.print("AP IP address: ");
-  Serial.print(apPassword.c_str());
+  Serial.print(apPassword);
   Serial.println(IP);
   apMode = true;
 }
@@ -631,41 +650,28 @@ void handleButtons() {
               currentMenu = DEVICE_INFO;
               break;
           }
-        }else if (currentMenu == SET_TEMP_THRESHOLD) {
-          // Button 3 (Down/Select) pressed
-          gasThreshold -= 10;
-         
-          
-          
-        }else if (currentMenu == SET_GAS_THRESHOLD) {
-          // Button 3 (Down/Select) pressed
+        } else if (currentMenu == SET_TEMP_THRESHOLD) {
+          // In temp threshold menu, decrease temperature threshold
           tempThreshold -= 1;
-         
-
-          
-          
-        }else if (currentMenu == WIFI_SETTINGS) {
-          // Button 3 (Down/Select) pressed
+        } else if (currentMenu == SET_GAS_THRESHOLD) {
+          // In gas threshold menu, decrease gas threshold
+          gasThreshold -= 10;
+        } else if (currentMenu == WIFI_SETTINGS) {
+          // Toggle AP mode
           apMode = !apMode;
           if (apMode) {
             setupAccessPoint();
           } else {
             setupStation();
           }
-         
-
-          
-          
-          
-        }
-        
-        else {
+        } else {
           // Navigate within submenu
           menuPosition = (menuPosition + 1) % MAX_MENU_ITEMS;
         }
         navigateMenu();
       }
     }
+  
   }
   
   menuButtonLastState = menuButton;
