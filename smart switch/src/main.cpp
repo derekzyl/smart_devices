@@ -12,8 +12,8 @@ IPAddress subnet(255, 255, 255, 0);
 ESP8266WebServer server(80);
 
 // GPIO pin configuration
-const int relayPin = 2; // GPIO2 on ESP-01
-const int pirPin = 0;   // GPIO0 on ESP-01 for PIR sensor
+const int relayPin = 0; // GPIO2 on ESP-01
+const int pirPin = 2;   // GPIO0 on ESP-01 for PIR sensor
 
 // State variables
 bool relayState = false;
@@ -35,7 +35,7 @@ void setup() {
   // Initialize pins
   pinMode(relayPin, OUTPUT);
   pinMode(pirPin, INPUT);
-  digitalWrite(relayPin, LOW); // Ensure relay starts in OFF state
+  digitalWrite(relayPin, HIGH); // Ensure relay starts in OFF state
   
   // Configure access point with static IP
   WiFi.mode(WIFI_AP);
@@ -59,6 +59,7 @@ void setup() {
   // Start server
   server.begin();
   Serial.println("HTTP server started");
+  digitalWrite(relayPin, LOW); // Turn on relay when server starts
 }
 
 void loop() {
